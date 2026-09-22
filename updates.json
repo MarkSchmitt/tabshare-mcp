@@ -1,7 +1,13 @@
 {
   "addons": {
     "tabshare-mcp@markschmitt.github.io": {
-      "updates": []
+      "updates": [
+        {
+          "version": "0.1.0",
+          "update_link": "https://github.com/MarkSchmitt/tabshare-mcp/releases/download/v0.1.0/tabshare-mcp-0.1.0.xpi",
+          "update_hash": "sha256:adc105fad74d27ecd94a7f31ddbe2d591e761571ccf4401dd61e7604031c1e36"
+        }
+      ]
     }
   }
 }
