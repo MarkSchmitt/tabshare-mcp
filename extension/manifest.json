@@ -1,0 +1,56 @@
+{
+  "manifest_version": 2,
+  "name": "TabShare MCP",
+  "version": "0.1.0",
+  "description": "Explicitly share individual tabs with an AI agent (Claude Code, opencode, any MCP client) — for a limited time, clearly marked, revocable at any moment.",
+  "author": "Mark Schmitt",
+  "homepage_url": "https://github.com/MarkSchmitt/tabshare-mcp",
+  "developer": {
+    "name": "Mark Schmitt",
+    "url": "https://github.com/MarkSchmitt"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tabshare-mcp@markschmitt.github.io",
+      "strict_min_version": "140.0",
+      "update_url": "https://raw.githubusercontent.com/MarkSchmitt/tabshare-mcp/main/updates.json",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg",
+    "128": "icons/icon.svg"
+  },
+  "permissions": [
+    "<all_urls>",
+    "tabs",
+    "nativeMessaging",
+    "menus",
+    "storage",
+    "tabGroups"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "persistent": true
+  },
+  "browser_action": {
+    "default_title": "TabShare MCP — share this tab with an agent",
+    "default_icon": "icons/icon.svg",
+    "default_popup": "popup/popup.html"
+  },
+  "commands": {
+    "toggle-share": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Share / stop sharing the current tab"
+    }
+  }
+}

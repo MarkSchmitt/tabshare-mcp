@@ -1,0 +1,17 @@
+{
+  "name": "tabshare-mcp",
+  "displayName": "TabShare MCP — Firefox tabs",
+  "version": "0.1.0",
+  "description": "Let Claude see and drive individual Firefox tabs you explicitly share — time-limited, clearly marked, revocable at any moment. Needs the TabShare Firefox extension.",
+  "author": { "name": "Mark Schmitt", "url": "https://github.com/MarkSchmitt" },
+  "homepage": "https://github.com/MarkSchmitt/tabshare-mcp#readme",
+  "repository": "https://github.com/MarkSchmitt/tabshare-mcp",
+  "license": "MIT",
+  "keywords": ["firefox", "browser", "mcp", "tabs", "automation"],
+  "mcpServers": {
+    "firefox-tabs": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/mcp-server.js"]
+    }
+  }
+}

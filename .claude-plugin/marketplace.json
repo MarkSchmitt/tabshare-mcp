@@ -1,0 +1,16 @@
+{
+  "name": "tabshare",
+  "description": "TabShare MCP \u2014 let Claude see and drive Firefox tabs you explicitly share.",
+  "owner": {
+    "name": "Mark Schmitt",
+    "url": "https://github.com/MarkSchmitt"
+  },
+  "plugins": [
+    {
+      "name": "tabshare-mcp",
+      "source": "./",
+      "description": "Let Claude see and drive individual Firefox tabs you explicitly share \u2014 time-limited, clearly marked, revocable at any moment.",
+      "version": "0.1.0"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+web-ext-artifacts/
+*.xpi
+.env
+.DS_Store
+.vscode/
+.idea/

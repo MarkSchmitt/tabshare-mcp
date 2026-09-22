@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The runtime (server/, scripts/) has no dependencies and supports Node 18+.
+  runtime:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm run version:check
+      - run: npm test
+      - name: Installer smoke test (throwaway HOME)
+        run: |
+          export HOME="$(mktemp -d)"
+          mkdir -p "$HOME/.mozilla"
+          node scripts/install-native-host.js --client=json
+          node scripts/doctor.js
+          node scripts/install-native-host.js --uninstall
+
+  # web-ext (lint/build/sign) needs Node 20+.
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:ext
+      - run: npm run build:ext

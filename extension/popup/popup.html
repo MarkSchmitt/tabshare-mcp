@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>TabShare MCP</h1>
+    <span id="conn" class="conn"></span>
+  </header>
+
+  <div id="error" class="error" hidden></div>
+
+  <section id="current">
+    <div id="tabTitle" class="tab-title"></div>
+
+    <div id="shareForm">
+      <div class="row">
+        <label><input type="radio" name="mode" value="control"> Full control</label>
+        <label><input type="radio" name="mode" value="read"> View only</label>
+      </div>
+      <div class="row">
+        <label for="minutes">Share for</label>
+        <select id="minutes">
+          <option value="10">10 minutes</option>
+          <option value="30">30 minutes</option>
+          <option value="60">1 hour</option>
+          <option value="240">4 hours</option>
+          <option value="0">until I stop it</option>
+        </select>
+      </div>
+      <textarea id="note" rows="2" placeholder="Optional note for the agent, e.g. “look at the failing job in the table”"></textarea>
+      <button id="shareBtn" class="primary">Share this tab with agent</button>
+    </div>
+
+    <div id="sharedBox" hidden>
+      <div id="sharedInfo" class="shared-info"></div>
+      <button id="stopBtn" class="danger">Stop sharing this tab</button>
+      <details id="logBox">
+        <summary>Agent activity</summary>
+        <ul id="log"></ul>
+      </details>
+    </div>
+  </section>
+
+  <section id="others" hidden>
+    <h2>All shared tabs</h2>
+    <ul id="sharedList"></ul>
+    <button id="stopAllBtn">Stop sharing all</button>
+  </section>
+
+  <footer>
+    <label><input type="checkbox" id="groupPref"> Mark shared tabs with a red tab group</label>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

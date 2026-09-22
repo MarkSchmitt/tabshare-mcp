@@ -1,0 +1,62 @@
+# Tag a version (git tag v0.2.0 && git push --tags) and this signs the
+# extension through addons.mozilla.org (unlisted channel), records it in
+# updates.json so installed copies auto-update, and publishes a GitHub
+# release with the .xpi attached.
+#
+# Needs two repository secrets from https://addons.mozilla.org/developers/addon/api/key/ :
+#   AMO_JWT_ISSUER, AMO_JWT_SECRET
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tag must match package.json
+        run: |
+          test "v$(node -p 'require("./package.json").version')" = "${GITHUB_REF_NAME}" \
+            || { echo "tag ${GITHUB_REF_NAME} != package.json version"; exit 1; }
+          npm run version:check
+      - run: npm test
+      - name: Sign with addons.mozilla.org (unlisted)
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: npx web-ext sign --source-dir extension --artifacts-dir dist --channel unlisted
+      - name: Rename asset and update updates.json
+        id: asset
+        run: |
+          VERSION="$(node -p 'require("./package.json").version')"
+          XPI="$(ls dist/*.xpi | head -1)"
+          mv "$XPI" "dist/tabshare-mcp-${VERSION}.xpi"
+          node scripts/update-manifest.js "dist/tabshare-mcp-${VERSION}.xpi"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Commit updates.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates.json
+          git commit -m "Release ${{ steps.asset.outputs.version }}: update manifest"
+          git push origin HEAD:main
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" "dist/tabshare-mcp-${{ steps.asset.outputs.version }}.xpi" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "Signed Firefox extension for TabShare MCP ${{ steps.asset.outputs.version }}. Download the .xpi and open it in Firefox. Installed copies update automatically."

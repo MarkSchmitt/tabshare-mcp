@@ -1,0 +1,47 @@
+{
+  "name": "tabshare-mcp",
+  "version": "0.1.0",
+  "description": "Share individual Firefox tabs with an AI agent over MCP — time-limited, clearly marked, revocable at any moment",
+  "license": "MIT",
+  "author": {
+    "name": "Mark Schmitt",
+    "url": "https://github.com/MarkSchmitt"
+  },
+  "homepage": "https://github.com/MarkSchmitt/tabshare-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarkSchmitt/tabshare-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MarkSchmitt/tabshare-mcp/issues"
+  },
+  "keywords": [
+    "firefox",
+    "firefox-extension",
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "opencode",
+    "browser-automation",
+    "native-messaging"
+  ],
+  "engines": { "node": ">=18" },
+  "bin": {
+    "tabshare-mcp": "server/mcp-server.js"
+  },
+  "scripts": {
+    "install-host": "node scripts/install-native-host.js",
+    "uninstall-host": "node scripts/install-native-host.js --uninstall",
+    "doctor": "node scripts/doctor.js",
+    "test": "node test/relay.test.js",
+    "version:sync": "node scripts/sync-version.js",
+    "version:check": "node scripts/sync-version.js --check",
+    "lint:ext": "web-ext lint --source-dir extension --self-hosted",
+    "build:ext": "web-ext build --source-dir extension --artifacts-dir dist --overwrite-dest",
+    "sign:ext": "web-ext sign --source-dir extension --artifacts-dir dist --channel unlisted",
+    "dev": "web-ext run --source-dir extension"
+  },
+  "devDependencies": {
+    "web-ext": "^10.7.0"
+  }
+}
