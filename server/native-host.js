@@ -4,13 +4,14 @@
 // Native messaging host. Firefox starts this process when the first tab gets
 // shared and closes its stdin when the last one is unshared. It is a dumb
 // relay between the extension (stdin/stdout, length-prefixed JSON) and any
-// number of MCP servers (unix socket, newline-delimited JSON).
+// number of MCP servers (unix socket / Windows named pipe, newline-delimited
+// JSON).
 //
 // stdout belongs to the native messaging protocol — never log to it.
 
 const fs = require("node:fs");
 const net = require("node:net");
-const { socketPath, lineReader } = require("./common");
+const { WINDOWS, socketPath, lineReader } = require("./common");
 
 const SOCKET = socketPath();
 const MAX_TO_EXTENSION = 900 * 1024; // Firefox rejects host->extension messages over 1 MB.
@@ -18,11 +19,17 @@ const MAX_TO_EXTENSION = 900 * 1024; // Firefox rejects host->extension messages
 const clients = new Map();
 let nextClient = 1;
 
-function toExtension(msg) {
+function toExtension(msg, done) {
   const body = Buffer.from(JSON.stringify(msg));
   const header = Buffer.alloc(4);
   header.writeUInt32LE(body.length);
-  process.stdout.write(Buffer.concat([header, body]));
+  process.stdout.write(Buffer.concat([header, body]), done);
+}
+
+// Writes to a pipe are asynchronous on Windows: exiting right after
+// toExtension() would drop the message.
+function die(message) {
+  toExtension({ event: "error", message }, () => process.exit(1));
 }
 
 function fromExtension(msg) {
@@ -71,26 +78,27 @@ const server = net.createServer((conn) => {
 });
 
 function listen() {
-  process.umask(0o077);
+  if (!WINDOWS) process.umask(0o077);
   server.listen(SOCKET, () => {
-    fs.chmodSync(SOCKET, 0o600);
+    if (!WINDOWS) fs.chmodSync(SOCKET, 0o600);
     toExtension({ event: "ready" });
   });
 }
 
 server.on("error", (e) => {
-  toExtension({ event: "error", message: `Native host: ${e.message}` });
-  process.exit(1);
+  die(e.code === "EADDRINUSE"
+    ? "Another Firefox instance is already sharing tabs via TabShare."
+    : `Native host: ${e.message}`);
 });
 
 // A leftover socket file from a crashed host is removed; a live one means
-// another Firefox instance/profile is already sharing.
-if (fs.existsSync(SOCKET)) {
+// another Firefox instance/profile is already sharing. A named pipe vanishes
+// with its server, so Windows skips the probe and relies on EADDRINUSE.
+if (!WINDOWS && fs.existsSync(SOCKET)) {
   const probe = net.connect(SOCKET);
   probe.on("connect", () => {
     probe.destroy();
-    toExtension({ event: "error", message: "Another Firefox instance is already sharing tabs via TabShare." });
-    setTimeout(() => process.exit(1), 100);
+    die("Another Firefox instance is already sharing tabs via TabShare.");
   });
   probe.on("error", () => {
     try { fs.unlinkSync(SOCKET); } catch (_) { /* raced */ }
@@ -104,7 +112,7 @@ let owned = false;
 server.on("listening", () => { owned = true; });
 
 function shutdown() {
-  if (owned) {
+  if (owned && !WINDOWS) {
     try { fs.unlinkSync(SOCKET); } catch (_) { /* already gone */ }
   }
   process.exit(0);

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+* Windows support: the native host and the MCP server talk over a named pipe, and the installer
+  registers the host in the registry (`HKCU\Software\Mozilla\NativeMessagingHosts`, plus the
+  LibreWolf / Waterfox keys) with a `.bat` launcher. `npm run doctor` and `--uninstall` understand
+  both. CI runs the relay test and the installer smoke test on Windows too.
+* `install-native-host.js --help` printed nothing; fixed.
+
 ## 0.1.0 — 2026-09-22
 
 First public release.

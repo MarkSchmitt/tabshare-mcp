@@ -11,7 +11,10 @@ Issues and pull requests are welcome. A few things that make life easier:
   `READ_METHODS` or `CONTROL_METHODS` there, to `TOOLS` in `server/mcp-server.js`, and to the table
   in the README.
 * Before a PR: `npm test` (relay test, no Firefox needed), `npm run lint:ext`, and
-  `npm run version:check`. CI runs the same on Linux and macOS.
+  `npm run version:check`. CI runs the same on Linux, macOS and Windows.
+* **Platform knowledge lives in `scripts/browsers.js`** (manifest locations, registry keys, data
+  dir) **and `server/common.js`** (unix socket vs. named pipe). Everything else only branches on
+  the `WINDOWS` flag they export; the extension is platform-agnostic.
 * To try changes in a throwaway profile: `npm run dev` (web-ext run). To test against your real
   Firefox: `about:debugging` → *Load Temporary Add-on…* → `extension/manifest.json`.
 * Versions live in `package.json`; run `npm run version:sync` to copy it into the extension manifest.

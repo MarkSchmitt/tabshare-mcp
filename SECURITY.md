@@ -33,8 +33,10 @@ agent ──stdio──▶ server/mcp-server.js ──unix socket──▶ serve
   before anything touches a tab. The MCP server and the native host are unauthenticated relays and
   are treated as untrusted by the extension.
 * **The unix socket is `0600` in `$XDG_RUNTIME_DIR`** (`/tmp` as a fallback). Any process running as
-  your user can connect to it and act as an agent; other users on the machine cannot. No TCP port is
-  ever opened, so web pages cannot reach it.
+  your user can connect to it and act as an agent; other users on the machine cannot. On Windows it
+  is a named pipe (`\\.\pipe\tabshare-mcp-<user>`) with the default DACL, which likewise admits
+  only your account, SYSTEM and Administrators. No TCP port is ever opened, so web pages cannot
+  reach it.
 * **The native host only runs while at least one tab is shared.** Firefox starts it on the first
   share and stops it on the last unshare; the socket file is removed on exit.
 * **The extension only accepts the host named in its manifest**, and the host manifest only allows

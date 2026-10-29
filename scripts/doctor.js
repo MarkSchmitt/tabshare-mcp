@@ -8,7 +8,7 @@
 const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
-const { HOST_NAME, BROWSERS, hostCopyDir, launcher, stateFile, sandboxed } = require("./browsers");
+const { HOST_NAME, BROWSERS, WINDOWS, hostCopyDir, launcher, stateFile, registry, sandboxed } = require("./browsers");
 const { socketPath } = require("../server/common");
 
 const repo = path.resolve(__dirname, "..");
@@ -43,8 +43,8 @@ if (fs.existsSync(stateFile)) {
 if (fs.existsSync(launcher)) {
   try { fs.accessSync(launcher, fs.constants.X_OK); ok(`launcher ${launcher}`); }
   catch (_) { bad(`launcher ${launcher} is not executable`); }
-  const nodeLine = /^NODE='(.*)'$/m.exec(fs.readFileSync(launcher, "utf8"));
-  const nodeBin = nodeLine && nodeLine[1].replace(/'\\''/g, "'");
+  const nodeLine = (WINDOWS ? /^set "NODE=(.*)"\r?$/m : /^NODE='(.*)'$/m).exec(fs.readFileSync(launcher, "utf8"));
+  const nodeBin = nodeLine && (WINDOWS ? nodeLine[1] : nodeLine[1].replace(/'\\''/g, "'"));
   if (nodeBin && fs.existsSync(nodeBin)) ok(`launcher uses node ${nodeBin}`);
   else bad(`launcher points at a node binary that no longer exists (${nodeBin}) — re-run: npm run install-host`);
 } else if (state) {
@@ -58,11 +58,21 @@ for (const f of ["native-host.js", "common.js"]) {
   else warn(`host copy ${f} differs from this checkout — re-run: npm run install-host`);
 }
 
-// Browser manifests
+// Browser manifests. Linux/macOS: a JSON file in the browser's directory.
+// Windows: the registry says where the JSON file is.
 let registered = 0;
 for (const b of Object.values(BROWSERS)) {
-  const file = path.join(b.hostDir, `${HOST_NAME}.json`);
-  if (!fs.existsSync(file)) { if (fs.existsSync(b.profileDir)) warn(`${b.label}: profile found but no manifest at ${file}`); continue; }
+  let file = path.join(b.hostDir, `${HOST_NAME}.json`);
+  if (WINDOWS) {
+    const key = `${b.regKeys[0]}\\${HOST_NAME}`;
+    const value = registry.get(key);
+    if (!value) { if (fs.existsSync(b.profileDir)) warn(`${b.label}: profile found but no registry key HKCU\\${key}`); continue; }
+    if (!fs.existsSync(value)) { bad(`${b.label}: HKCU\\${key} points at ${value}, which does not exist — re-run: npm run install-host`); continue; }
+    file = value;
+  } else if (!fs.existsSync(file)) {
+    if (fs.existsSync(b.profileDir)) warn(`${b.label}: profile found but no manifest at ${file}`);
+    continue;
+  }
   registered++;
   let m;
   try { m = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { bad(`${b.label}: ${file} is not valid JSON`); continue; }
@@ -76,16 +86,15 @@ for (const b of Object.values(BROWSERS)) {
 if (registered === 0 && state) bad("no browser has a manifest — re-run: npm run install-host");
 for (const s of sandboxed()) warn(`${s.label} found at ${s.dir} — sandboxed builds are not supported`);
 
-// Socket
+// Socket / named pipe: probe by connecting, which works for both.
 const sock = socketPath();
-if (!fs.existsSync(sock)) {
-  ok(`no socket at ${sock} — normal while no tab is shared`);
+const c = net.connect(sock);
+c.once("connect", () => { c.destroy(); ok(`native host is running and accepting connections (${sock}) — a tab is shared right now`); done(); });
+c.once("error", (e) => {
+  if (e.code === "ENOENT") ok(`no socket at ${sock} — normal while no tab is shared`);
+  else bad(`socket ${sock} exists but refuses connections (${e.code}) — stale file from a crashed host; unshare and share again`);
   done();
-} else {
-  const c = net.connect(sock);
-  c.once("connect", () => { c.destroy(); ok(`native host is running and accepting connections (${sock}) — a tab is shared right now`); done(); });
-  c.once("error", (e) => { bad(`socket ${sock} exists but refuses connections (${e.code}) — stale file from a crashed host; unshare and share again`); done(); });
-}
+});
 
 function done() {
   console.log(failures ? `\n${failures} problem(s) found.` : "\nEverything looks fine.");

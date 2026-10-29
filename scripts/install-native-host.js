@@ -2,10 +2,10 @@
 "use strict";
 
 // Registers the TabShare native messaging host with the Firefox-family
-// browsers of the current user. This is about Firefox, not about the agent:
-// it is the same one-time step for Claude Code, opencode or any other MCP
-// client. Re-run after upgrading (it refreshes the host copy) or after
-// switching Node installations.
+// browsers of the current user, on Linux, macOS and Windows. This is about
+// Firefox, not about the agent: it is the same one-time step for Claude Code,
+// opencode or any other MCP client. Re-run after upgrading (it refreshes the
+// host copy) or after switching Node installations.
 //
 //   node scripts/install-native-host.js [options]
 //     --browser=firefox|librewolf|waterfox   register with this browser only
@@ -19,7 +19,9 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { HOST_NAME, BROWSERS, dataDir, hostCopyDir, launcher, stateFile, detected, sandboxed } = require("./browsers");
+const {
+  HOST_NAME, BROWSERS, WINDOWS, dataDir, hostCopyDir, launcher, stateFile, registry, detected, sandboxed,
+} = require("./browsers");
 
 const repo = path.resolve(__dirname, "..");
 const pkg = require(path.join(repo, "package.json"));
@@ -44,13 +46,9 @@ if (args.has("help")) usage(0);
 
 function usage(code) {
   const lines = fs.readFileSync(__filename, "utf8").split("\n").slice(2); // skip shebang + "use strict"
-  const text = lines.slice(1, lines.findIndex((l) => !l.startsWith("//"))).map((l) => l.slice(3)).join("\n");
+  const text = lines.slice(1, lines.findIndex((l, i) => i > 0 && !l.startsWith("//"))).map((l) => l.slice(3)).join("\n");
   (code ? console.error : console.log)(text);
   process.exit(code);
-}
-
-if (process.platform === "win32") {
-  fail("Windows registers native messaging hosts in the registry; this script only supports Linux and macOS.");
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +57,13 @@ if (process.platform === "win32") {
 if (args.has("uninstall")) {
   const removed = [];
   const rm = (f) => { if (fs.existsSync(f)) { fs.rmSync(f, { recursive: true, force: true }); removed.push(f); } };
-  for (const b of Object.values(BROWSERS)) rm(path.join(b.hostDir, `${HOST_NAME}.json`));
+  for (const b of Object.values(BROWSERS)) {
+    rm(path.join(b.hostDir, `${HOST_NAME}.json`));
+    for (const key of b.regKeys || []) {
+      const full = `HKCU\\${key}\\${HOST_NAME}`;
+      if (registry.delete(`${key}\\${HOST_NAME}`)) removed.push(full);
+    }
+  }
   rm(launcher); rm(hostCopyDir); rm(stateFile);
   try { fs.rmdirSync(dataDir); } catch (_) { /* not empty or absent */ }
   if (removed.length) console.log(`Removed:\n${removed.map((f) => `  ${f}`).join("\n")}`);
@@ -104,7 +108,7 @@ if (args.has("browser")) {
 // Node from a version manager works until that version is removed or, with
 // fnm, until the shell that ran this script exits.
 const nodeBin = process.execPath;
-if (/\/(\.nvm|\.fnm|fnm_multishells|\.volta|\.asdf|\.n\/)/.test(nodeBin)) {
+if (/[\\/](\.nvm|nvm|\.fnm|fnm_multishells|\.volta|\.asdf|\.n)[\\/]/.test(nodeBin)) {
   warn(`Pinning Node from a version manager (${nodeBin}).\n` +
     "  Firefox starts the host outside your shell, so this exact binary must keep existing.\n" +
     "  If you later remove that Node version, re-run this script. A system Node (e.g. /usr/bin/node) is more robust.");
@@ -120,17 +124,32 @@ fs.mkdirSync(hostCopyDir, { recursive: true });
 for (const f of HOST_FILES) fs.copyFileSync(path.join(repo, "server", f), path.join(hostCopyDir, f));
 const hostScript = path.join(hostCopyDir, "native-host.js");
 
-const sq = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
-fs.writeFileSync(launcher, [
-  "#!/bin/sh",
-  "# Written by tabshare-mcp/scripts/install-native-host.js — Firefox starts this to reach the native host.",
-  `NODE=${sq(nodeBin)}`,
-  `HOST=${sq(hostScript)}`,
-  '[ -x "$NODE" ] || { echo "tabshare-mcp: node not found at $NODE — re-run install-native-host.js" >&2; exit 1; }',
-  '[ -f "$HOST" ] || { echo "tabshare-mcp: native host missing at $HOST — re-run install-native-host.js" >&2; exit 1; }',
-  'exec "$NODE" "$HOST" "$@"',
-  "",
-].join("\n"), { mode: 0o755 });
+// Shell quoting for the snippets below: double quotes on Windows (cmd and
+// PowerShell), single quotes elsewhere. Windows paths cannot contain quotes.
+const sq = (s) => (WINDOWS ? `"${s}"` : `'${String(s).replace(/'/g, "'\\''")}'`);
+const launcherLines = WINDOWS
+  ? [
+      "@echo off",
+      "rem Written by tabshare-mcp/scripts/install-native-host.js - Firefox starts this to reach the native host.",
+      `set "NODE=${nodeBin}"`,
+      `set "HOST=${hostScript}"`,
+      'if not exist "%NODE%" (echo tabshare-mcp: node not found at %NODE% - re-run install-native-host.js 1>&2 & exit /b 1)',
+      'if not exist "%HOST%" (echo tabshare-mcp: native host missing at %HOST% - re-run install-native-host.js 1>&2 & exit /b 1)',
+      '"%NODE%" "%HOST%" %*',
+      "",
+    ]
+  : [
+      "#!/bin/sh",
+      "# Written by tabshare-mcp/scripts/install-native-host.js — Firefox starts this to reach the native host.",
+      `NODE=${sq(nodeBin)}`,
+      `HOST=${sq(hostScript)}`,
+      '[ -x "$NODE" ] || { echo "tabshare-mcp: node not found at $NODE — re-run install-native-host.js" >&2; exit 1; }',
+      '[ -f "$HOST" ] || { echo "tabshare-mcp: native host missing at $HOST — re-run install-native-host.js" >&2; exit 1; }',
+      'exec "$NODE" "$HOST" "$@"',
+      "",
+    ];
+// Batch files are read as the OEM code page; keep the Windows launcher ASCII.
+fs.writeFileSync(launcher, launcherLines.join(WINDOWS ? "\r\n" : "\n"), { mode: 0o755 });
 
 const written = [];
 for (const key of targets) {
@@ -144,13 +163,16 @@ for (const key of targets) {
     type: "stdio",
     allowed_extensions: [EXTENSION_ID],
   }, null, 2)}\n`);
-  written.push([b.label, file]);
+  // Firefox on Windows finds the manifest through the registry, not by path.
+  for (const key of b.regKeys || []) registry.set(`${key}\\${HOST_NAME}`, file);
+  written.push([b.label, WINDOWS ? b.regKeys.map((k) => `HKCU\\${k}\\${HOST_NAME}`).join(", ") : file]);
 }
 
 fs.writeFileSync(stateFile, `${JSON.stringify({
   version: pkg.version,
   installedAt: new Date().toISOString(),
   source: repo,
+  platform: process.platform,
   node: nodeBin,
   extensionId: EXTENSION_ID,
   browsers: targets,
@@ -160,7 +182,8 @@ fs.writeFileSync(stateFile, `${JSON.stringify({
 // Report
 
 console.log(`Native host ${pkg.version} registered for ${written.map(([l]) => l).join(", ")}:`);
-for (const [, f] of written) console.log(`  ${f}`);
+for (const [l, f] of written) console.log(WINDOWS ? `  ${l}: ${f}` : `  ${f}`);
+if (WINDOWS) console.log(`  -> ${path.join(dataDir, `${HOST_NAME}.json`)}`);
 console.log(`Host copied to ${hostCopyDir}, launcher ${launcher} (node: ${nodeBin})`);
 
 const client = args.get("client");

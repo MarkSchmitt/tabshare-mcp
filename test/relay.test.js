@@ -8,9 +8,12 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { lineReader } = require("../server/common");
+const { WINDOWS, lineReader } = require("../server/common");
 
-const sockPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tabshare-test-")), "s.sock");
+// Unix socket in a throwaway directory; on Windows a named pipe, which needs
+// no file and vanishes with its server.
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tabshare-test-"));
+const sockPath = WINDOWS ? `\\\\.\\pipe\\tabshare-test-${process.pid}` : path.join(tmpDir, "s.sock");
 const env = { ...process.env, TABSHARE_SOCKET: sockPath };
 const server = (name) => path.join(__dirname, "..", "server", name);
 
@@ -68,7 +71,7 @@ const children = [];
 const watchdog = setTimeout(() => { console.error("relay test: timed out"); cleanup(1); }, 30000);
 function cleanup(code) {
   for (const c of children) { try { c.kill(); } catch (_) { /* gone */ } }
-  fs.rmSync(path.dirname(sockPath), { recursive: true, force: true });
+  fs.rmSync(tmpDir, { recursive: true, force: true });
   process.exit(code);
 }
 
@@ -91,7 +94,7 @@ function cleanup(code) {
     return { result: { text: `echo ${req.method} ${JSON.stringify(req.params)}` } };
   });
   await until(() => events.some((e) => e.event === "ready"), "host ready");
-  assert.equal(fs.statSync(sockPath).mode & 0o777, 0o600);
+  if (!WINDOWS) assert.equal(fs.statSync(sockPath).mode & 0o777, 0o600);
 
   res = await rpc("tools/call", { name: "snapshot", arguments: { tabId: 7 } });
   assert.equal(res.result.content[0].text, 'echo snapshot {"tabId":7}');
@@ -123,10 +126,12 @@ function cleanup(code) {
   // Extension disconnects (last tab unshared): host exits and cleans up.
   host.stdin.end();
   await new Promise((r) => host.on("exit", r));
-  assert.equal(fs.existsSync(sockPath), false);
+  if (!WINDOWS) assert.equal(fs.existsSync(sockPath), false);
 
+  // ... and nothing answers on the socket / pipe any more.
   res = await rpc("tools/call", { name: "snapshot", arguments: {} });
   assert.equal(res.result.isError, true);
+  assert.match(res.result.content[0].text, /No tab is shared/);
 
   mcp.stdin.end();
   clearTimeout(watchdog);
