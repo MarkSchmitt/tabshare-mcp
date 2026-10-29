@@ -8,7 +8,8 @@ in your real, logged-in session, and tabs you did not share are invisible to it.
 
 ```
 agent ──stdio──▶ server/mcp-server.js ──unix socket──▶ server/native-host.js ◀──native messaging──▶ extension
-(MCP client)    (one per agent session)   (0600, per user)  (started by Firefox while ≥1 tab is shared)
+(MCP client)    (one per agent session)   (0600, per user;  (started by Firefox while ≥1 tab is shared)
+                                           named pipe on Windows)
 ```
 
 * The **extension** owns all policy: which tabs are shared, view-only vs. full control, expiry.
@@ -19,8 +20,8 @@ agent ──stdio──▶ server/mcp-server.js ──unix socket──▶ serve
 
 ## Installation
 
-Requirements: Linux or macOS · Firefox ≥ 140 (also LibreWolf, Waterfox; **not** Flatpak/Snap builds,
-see [below](#things-to-know)) · Node ≥ 18. The runtime has no npm dependencies.
+Requirements: Linux, macOS or Windows · Firefox ≥ 140 (also LibreWolf, Waterfox; **not** Flatpak/Snap
+builds, see [below](#things-to-know)) · Node ≥ 18. The runtime has no npm dependencies.
 
 ### 1. Install the Firefox extension
 
@@ -54,8 +55,11 @@ node scripts/install-native-host.js
 It writes `~/.mozilla/native-messaging-hosts/tabshare_mcp.json` (and the LibreWolf / Waterfox /
 macOS equivalents for every browser it finds), and copies the host into
 `~/.local/share/tabshare-mcp/` together with a launcher that pins the absolute path of `node`.
-Re-run it after upgrading or switching Node versions; `--uninstall` removes everything it wrote,
-`--help` lists the options.
+On Windows the manifest lives in `%LOCALAPPDATA%\tabshare-mcp\` next to a `native-host.bat`
+launcher, and the installer points `HKCU\Software\Mozilla\NativeMessagingHosts\tabshare_mcp`
+(plus the LibreWolf / Waterfox keys) at it — that is how Firefox finds native hosts there.
+Re-run it after upgrading or switching Node versions; `--uninstall` removes everything it wrote
+(registry keys included), `--help` lists the options.
 
 ### 3. Tell your agent about the MCP server
 
@@ -136,7 +140,8 @@ vision-capable to see it.
 * One Firefox instance per user can share at a time.
 * **Flatpak and Snap Firefox are not supported:** the sandbox has no Node inside it and cannot start a
   host from your home directory. Use a distribution package or the build from mozilla.org.
-  Windows is not supported yet (native hosts are registered in the registry there).
+* **Windows:** tested with the Firefox installer from mozilla.org. The MCP server and the host talk
+  over a named pipe (`\\.\pipe\tabshare-mcp-<user>`) instead of a unix socket.
 
 ## Development
 

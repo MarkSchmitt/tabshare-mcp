@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         node: [18, 20, 22]
     steps:
       - uses: actions/checkout@v4
@@ -21,12 +21,32 @@ jobs:
       - run: npm run version:check
       - run: npm test
       - name: Installer smoke test (throwaway HOME)
+        if: runner.os != 'Windows'
         run: |
           export HOME="$(mktemp -d)"
           mkdir -p "$HOME/.mozilla"
           node scripts/install-native-host.js --client=json
           node scripts/doctor.js
           node scripts/install-native-host.js --uninstall
+      - name: Installer smoke test (throwaway APPDATA, real HKCU of the runner)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:RUNNER_TEMP "tabshare-home"
+          $env:APPDATA = Join-Path $tmp "Roaming"
+          $env:LOCALAPPDATA = Join-Path $tmp "Local"
+          New-Item -ItemType Directory -Force (Join-Path $env:APPDATA "Mozilla\Firefox") | Out-Null
+          node scripts/install-native-host.js --client=json
+          node scripts/doctor.js
+          $manifest = (Get-ItemProperty "HKCU:\Software\Mozilla\NativeMessagingHosts\tabshare_mcp")."(default)"
+          if (-not (Test-Path $manifest)) { throw "registry does not point at the manifest: $manifest" }
+          # The launcher must start the host: an empty native-messaging stream on stdin means "exit cleanly".
+          $bat = (Get-Content $manifest | ConvertFrom-Json).path
+          $empty = Join-Path $tmp "empty"; New-Item -ItemType File -Force $empty | Out-Null
+          $p = Start-Process -FilePath $bat -RedirectStandardInput $empty -NoNewWindow -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "launcher exited with $($p.ExitCode)" }
+          node scripts/install-native-host.js --uninstall
+          if (Test-Path "HKCU:\Software\Mozilla\NativeMessagingHosts\tabshare_mcp") { throw "registry key not removed" }
 
   # web-ext (lint/build/sign) needs Node 20+.
   extension:
